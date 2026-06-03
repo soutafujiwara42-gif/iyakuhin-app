@@ -27,16 +27,22 @@ const ComparePage = (() => {
   }
 
   async function render(container) {
-    container.innerHTML = `<div class="loading"><div class="spinner"></div>データ読み込み中...</div>`;
+    container.innerHTML = `<div class="loading"><div class="spinner"></div>添付文書データ読み込み中…（初回のみ時間がかかります）</div>`;
     await loadData();
 
     container.innerHTML = `
       <div class="card" id="cmp-search-card">
         <div style="font-weight:700;font-size:1rem;margin-bottom:0.75rem">薬品を選択（最大4つ）</div>
-        <div class="search-box">
-          <input type="text" class="search-input" id="cmp-search" placeholder="商品名または一般名で検索...">
+        <div class="cmp-filter-row">
+          <div class="search-box" style="flex:1;margin-bottom:0">
+            <input type="text" class="search-input" id="cmp-search" placeholder="商品名または一般名で検索...">
+          </div>
+          <label class="toggle-label">
+            <input type="checkbox" id="cmp-senpatsu-only"> 先発品のみ
+          </label>
         </div>
-        <div id="cmp-search-results"></div>
+        <div id="cmp-search-results" style="margin-top:0.75rem"></div>
+        <div class="cmp-hint">💡 同一一般名の先発品・後発品を選ぶと適応の差異を確認できます</div>
       </div>
 
       <div id="cmp-selected-area"></div>
@@ -44,6 +50,7 @@ const ComparePage = (() => {
     `;
 
     document.getElementById('cmp-search').addEventListener('input', onSearchInput);
+    document.getElementById('cmp-senpatsu-only').addEventListener('change', onSearchInput);
     renderSelected();
   }
 
@@ -58,12 +65,15 @@ const ComparePage = (() => {
     if (!el) return;
     if (!q) { el.innerHTML = ''; return; }
     const ql = q.toLowerCase();
+    const senpatsuOnly = document.getElementById('cmp-senpatsu-only')?.checked;
+
     const results = Object.entries(insertsData)
-      .filter(([, d]) =>
-        d.generic.toLowerCase().includes(ql) ||
-        d.brands.some(b => b.toLowerCase().includes(ql))
-      )
-      .slice(0, 30);
+      .filter(([, d]) => {
+        if (senpatsuOnly && !d.senpatsu) return false;
+        return d.generic.toLowerCase().includes(ql) ||
+               d.brands.some(b => b.toLowerCase().includes(ql));
+      })
+      .slice(0, 40);
 
     if (results.length === 0) {
       el.innerHTML = `<div style="color:var(--text-muted);font-size:0.875rem;padding:0.5rem">見つかりませんでした</div>`;
@@ -74,10 +84,17 @@ const ComparePage = (() => {
       const alreadySelected = selectedDrugs.some(s => s.xml_id === xml_id);
       const full = selectedDrugs.length >= 4;
       const disabled = alreadySelected || full;
+      const badge = d.senpatsu
+        ? `<span class="drug-type-badge senpatsu">先発</span>`
+        : `<span class="drug-type-badge generic">後発</span>`;
       return `
         <div class="search-result-item ${disabled ? 'disabled' : ''}" data-id="${xml_id}">
-          <div style="font-weight:600">${d.generic}</div>
-          <div style="font-size:0.8rem;color:var(--text-muted)">${d.brands.slice(0,3).join('、')}${d.brands.length>3?'…':''}</div>
+          <div style="display:flex;align-items:center;gap:0.4rem;font-weight:600">
+            ${badge}${d.generic}
+          </div>
+          <div style="font-size:0.8rem;color:var(--text-muted);margin-top:0.15rem">
+            ${d.brands.slice(0,3).join('、')}${d.brands.length>3?'…':''}
+          </div>
           ${alreadySelected ? '<span class="badge-added">追加済</span>' : ''}
         </div>
       `;
@@ -88,10 +105,9 @@ const ComparePage = (() => {
         const xml_id = item.dataset.id;
         const d = insertsData[xml_id];
         if (selectedDrugs.length < 4 && !selectedDrugs.some(s => s.xml_id === xml_id)) {
-          selectedDrugs.push({ xml_id, generic: d.generic, brands: d.brands });
+          selectedDrugs.push({ xml_id, generic: d.generic, brands: d.brands, senpatsu: d.senpatsu });
           renderSelected();
           renderComparison();
-          // 検索をリセット
           const inp = document.getElementById('cmp-search');
           if (inp) { inp.value = ''; }
           el.innerHTML = '';
@@ -118,6 +134,7 @@ const ComparePage = (() => {
         <div class="selected-drugs-row">
           ${selectedDrugs.map((d, i) => `
             <div class="selected-drug-chip" style="--chip-color:${COLORS[i]}">
+              <span class="chip-type">${d.senpatsu ? '先発' : '後発'}</span>
               <span>${d.generic}</span>
               <button class="chip-remove" data-idx="${i}">✕</button>
             </div>
@@ -206,7 +223,7 @@ const ComparePage = (() => {
             <tr>
               <th class="cmp-item-col">項目</th>
               ${drugs.map((d,i) => `<th style="background:${LIGHT_COLORS[i]}">
-                <div class="cmp-drug-header" style="color:${COLORS[i]}">薬${i+1}</div>
+                <div class="cmp-drug-header" style="color:${COLORS[i]}">薬${i+1} <span style="font-size:0.7rem;opacity:0.8">${d.senpatsu?'先発':'後発'}</span></div>
                 <div class="cmp-drug-name">${d.generic}</div>
               </th>`).join('')}
             </tr>
@@ -252,7 +269,7 @@ const ComparePage = (() => {
             const text = insertsData[d.xml_id]?.[key] || '';
             return `
               <div class="cmp-text-col" style="border-top:3px solid ${COLORS[i]}">
-                <div class="cmp-drug-header2" style="color:${COLORS[i]}">薬${i+1}: ${d.generic}</div>
+                <div class="cmp-drug-header2" style="color:${COLORS[i]}">薬${i+1}（${d.senpatsu?'先発':'後発'}）: ${d.generic}</div>
                 <div class="cmp-text-body">${text || '<span style="color:var(--text-muted)">記載なし</span>'}</div>
               </div>
             `;
