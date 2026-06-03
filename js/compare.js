@@ -16,14 +16,25 @@ const ComparePage = (() => {
     { key: 'hepatic',   label: '肝機能障害', type: 'text' },
   ];
 
+  // 後発品の 商品名「メーカー」から メーカー名を抽出
+  function extractMaker(brands) {
+    for (const b of brands) {
+      const m = b.match(/「(.+?)」/);
+      if (m) return m[1];
+    }
+    return '';
+  }
+
+  // スペース区切りで全トークンを含む部分一致
+  function matchTokens(text, tokens) {
+    const t = text.toLowerCase();
+    return tokens.every(tok => t.includes(tok));
+  }
+
   async function loadData() {
     if (insertsData) return;
-    const [ins, med] = await Promise.all([
-      fetch('data/inserts.json').then(r => r.json()),
-      fetch('data/medicines.json').then(r => r.json()),
-    ]);
-    insertsData = ins;
-    medicinesData = med;
+    const res = await fetch('data/inserts.json');
+    insertsData = await res.json();
   }
 
   async function render(container) {
@@ -63,20 +74,28 @@ const ComparePage = (() => {
   function doSearch(q) {
     const el = document.getElementById('cmp-search-results');
     if (!el) return;
-    if (!q) { el.innerHTML = ''; return; }
-    const ql = q.toLowerCase();
+    if (!q.trim()) { el.innerHTML = ''; return; }
+
+    // スペース区切りでトークン化（部分一致 AND 検索）
+    const tokens = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
     const senpatsuOnly = document.getElementById('cmp-senpatsu-only')?.checked;
 
     const results = Object.entries(insertsData)
       .filter(([, d]) => {
         if (senpatsuOnly && !d.senpatsu) return false;
-        return d.generic.toLowerCase().includes(ql) ||
-               d.brands.some(b => b.toLowerCase().includes(ql));
+        const maker = extractMaker(d.brands);
+        // 一般名・商品名・メーカー名すべてを対象にトークン一致
+        const searchTarget = [
+          d.generic,
+          ...d.brands,
+          maker
+        ].join(' ');
+        return matchTokens(searchTarget, tokens);
       })
-      .slice(0, 40);
+      .slice(0, 50);
 
     if (results.length === 0) {
-      el.innerHTML = `<div style="color:var(--text-muted);font-size:0.875rem;padding:0.5rem">見つかりませんでした</div>`;
+      el.innerHTML = `<div style="color:var(--text-muted);font-size:0.875rem;padding:0.5rem 0">見つかりませんでした</div>`;
       return;
     }
 
@@ -84,18 +103,29 @@ const ComparePage = (() => {
       const alreadySelected = selectedDrugs.some(s => s.xml_id === xml_id);
       const full = selectedDrugs.length >= 4;
       const disabled = alreadySelected || full;
+      const maker = extractMaker(d.brands);
       const badge = d.senpatsu
         ? `<span class="drug-type-badge senpatsu">先発</span>`
         : `<span class="drug-type-badge generic">後発</span>`;
+
+      // 後発品: メーカー名を大きく表示。先発品: 商品名を表示
+      const nameDisplay = d.senpatsu
+        ? `${d.brands[0] || d.generic}`
+        : `${d.brands[0]?.replace(/「.+?」/, '') || d.generic} <span class="maker-name">「${maker}」</span>`;
+
       return `
         <div class="search-result-item ${disabled ? 'disabled' : ''}" data-id="${xml_id}">
-          <div style="display:flex;align-items:center;gap:0.4rem;font-weight:600">
-            ${badge}${d.generic}
+          <div class="result-main-row">
+            ${badge}
+            <span class="result-generic">${d.generic}</span>
+            ${alreadySelected ? '<span class="badge-added">追加済</span>' : ''}
           </div>
-          <div style="font-size:0.8rem;color:var(--text-muted);margin-top:0.15rem">
-            ${d.brands.slice(0,3).join('、')}${d.brands.length>3?'…':''}
+          <div class="result-brand-row">
+            ${d.senpatsu
+              ? d.brands.slice(0,2).join('、') + (d.brands.length>2?'…':'')
+              : `<span class="maker-chip">${maker || d.brands[0]}</span> ${d.brands.slice(0,2).map(b=>b.replace(/「.+?」/,'')).join('、')}`
+            }
           </div>
-          ${alreadySelected ? '<span class="badge-added">追加済</span>' : ''}
         </div>
       `;
     }).join('');
@@ -105,7 +135,14 @@ const ComparePage = (() => {
         const xml_id = item.dataset.id;
         const d = insertsData[xml_id];
         if (selectedDrugs.length < 4 && !selectedDrugs.some(s => s.xml_id === xml_id)) {
-          selectedDrugs.push({ xml_id, generic: d.generic, brands: d.brands, senpatsu: d.senpatsu });
+          const maker = extractMaker(d.brands);
+          selectedDrugs.push({
+            xml_id,
+            generic: d.generic,
+            brands: d.brands,
+            senpatsu: d.senpatsu,
+            maker
+          });
           renderSelected();
           renderComparison();
           const inp = document.getElementById('cmp-search');
@@ -135,7 +172,7 @@ const ComparePage = (() => {
           ${selectedDrugs.map((d, i) => `
             <div class="selected-drug-chip" style="--chip-color:${COLORS[i]}">
               <span class="chip-type">${d.senpatsu ? '先発' : '後発'}</span>
-              <span>${d.generic}</span>
+              <span>${d.generic}${!d.senpatsu && d.maker ? `「${d.maker}」` : ''}</span>
               <button class="chip-remove" data-idx="${i}">✕</button>
             </div>
           `).join('')}
@@ -225,6 +262,7 @@ const ComparePage = (() => {
               ${drugs.map((d,i) => `<th style="background:${LIGHT_COLORS[i]}">
                 <div class="cmp-drug-header" style="color:${COLORS[i]}">薬${i+1} <span style="font-size:0.7rem;opacity:0.8">${d.senpatsu?'先発':'後発'}</span></div>
                 <div class="cmp-drug-name">${d.generic}</div>
+                ${!d.senpatsu && d.maker ? `<div style="font-size:0.7rem;color:var(--text-muted)">「${d.maker}」</div>` : ''}
               </th>`).join('')}
             </tr>
           </thead>
@@ -269,7 +307,7 @@ const ComparePage = (() => {
             const text = insertsData[d.xml_id]?.[key] || '';
             return `
               <div class="cmp-text-col" style="border-top:3px solid ${COLORS[i]}">
-                <div class="cmp-drug-header2" style="color:${COLORS[i]}">薬${i+1}（${d.senpatsu?'先発':'後発'}）: ${d.generic}</div>
+                <div class="cmp-drug-header2" style="color:${COLORS[i]}">薬${i+1}（${d.senpatsu?'先発':'後発'}）: ${d.generic}${!d.senpatsu&&d.maker?`「${d.maker}」`:''}</div>
                 <div class="cmp-text-body">${text || '<span style="color:var(--text-muted)">記載なし</span>'}</div>
               </div>
             `;

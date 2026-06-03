@@ -311,6 +311,26 @@ main {
   border-radius: 6px; border-left: 3px solid var(--primary);
 }
 
+/* 検索結果の各行 */
+.result-main-row {
+  display: flex; align-items: center; gap: 0.4rem;
+  font-weight: 600; flex-wrap: wrap;
+}
+.result-generic { flex: 1; min-width: 0; }
+.result-brand-row {
+  font-size: 0.8rem; color: var(--text-muted);
+  margin-top: 0.2rem; display: flex; align-items: center; gap: 0.3rem;
+  flex-wrap: wrap;
+}
+.maker-chip {
+  display: inline-block;
+  background: #fce7f3; color: #9d174d;
+  font-size: 0.75rem; font-weight: 700;
+  padding: 0.1rem 0.5rem; border-radius: 4px;
+  white-space: nowrap;
+}
+.maker-name { color: #9d174d; font-weight: 700; }
+
 .search-result-item {
   padding: 0.6rem 0.75rem;
   border: 1px solid var(--border);
