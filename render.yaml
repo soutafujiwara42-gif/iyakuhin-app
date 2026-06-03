@@ -4,6 +4,10 @@ services:
     env: static
     staticPublishPath: .
     buildCommand: ""
+    headers:
+      - path: /data/*.json
+        name: Cache-Control
+        value: no-cache, must-revalidate
     routes:
       - type: rewrite
         source: /*

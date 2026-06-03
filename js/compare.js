@@ -44,9 +44,12 @@ const ComparePage = (() => {
     return normalize(q).split(/[\s　]+/).filter(Boolean);
   }
 
+  const DATA_VERSION = '20260604b'; // inserts.json更新時に変更
+
   async function loadData() {
     if (insertsData) return;
-    const res = await fetch('data/inserts.json');
+    const res = await fetch(`data/inserts.json?v=${DATA_VERSION}`, { cache: 'no-cache' });
+    if (!res.ok) throw new Error(`inserts.json load failed: ${res.status}`);
     insertsData = await res.json();
   }
 
