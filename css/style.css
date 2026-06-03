@@ -280,3 +280,88 @@ main {
   .brand-name { font-size: 1.3rem; }
   .answer-row { flex-direction: column; }
 }
+
+/* ===== Compare Page ===== */
+.search-result-item {
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 0.4rem;
+  cursor: pointer;
+  transition: background 0.15s;
+  position: relative;
+}
+.search-result-item:hover:not(.disabled) { background: #eff6ff; border-color: var(--primary); }
+.search-result-item.disabled { opacity: 0.5; cursor: default; }
+.badge-added {
+  position: absolute; right: 0.75rem; top: 50%; transform: translateY(-50%);
+  background: #dbeafe; color: var(--primary); font-size: 0.75rem;
+  padding: 0.1rem 0.5rem; border-radius: 20px;
+}
+
+.selected-drugs-row { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.selected-drug-chip {
+  display: flex; align-items: center; gap: 0.5rem;
+  background: var(--chip-color, var(--primary));
+  color: white; padding: 0.35rem 0.6rem 0.35rem 0.9rem;
+  border-radius: 20px; font-size: 0.875rem; font-weight: 600;
+}
+.chip-remove {
+  background: rgba(255,255,255,0.25); border: none; color: white;
+  width: 20px; height: 20px; border-radius: 50%; cursor: pointer;
+  font-size: 0.75rem; display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s;
+}
+.chip-remove:hover { background: rgba(255,255,255,0.4); }
+
+.section-tabs { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.section-tab {
+  padding: 0.3rem 0.75rem; border-radius: 20px;
+  border: 1px solid var(--border); background: white;
+  font-size: 0.8rem; cursor: pointer; transition: all 0.15s;
+}
+.section-tab:hover { border-color: var(--primary); color: var(--primary); }
+.section-tab.active { background: var(--primary); color: white; border-color: var(--primary); }
+
+/* Comparison table */
+.cmp-legend { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
+.cmp-legend-item {
+  padding: 0.3rem 0.75rem; border-radius: 6px;
+  font-size: 0.8rem;
+}
+.cmp-table {
+  width: 100%; border-collapse: collapse; font-size: 0.875rem;
+  min-width: 500px;
+}
+.cmp-table th, .cmp-table td {
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  vertical-align: middle;
+}
+.cmp-table th { font-weight: 600; font-size: 0.8rem; text-align: center; }
+.cmp-item-col { text-align: left; max-width: 320px; width: 40%; }
+.cmp-cell { text-align: center; }
+.cmp-check { font-size: 1.1rem; font-weight: 700; }
+.cmp-none { color: #cbd5e1; font-size: 1.1rem; }
+.cmp-drug-header { font-weight: 700; font-size: 0.85rem; }
+.cmp-drug-name { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.1rem; }
+tr.row-diff { background: #fffbeb !important; }
+tr.row-diff td { border-left: none; }
+tr.row-diff td:first-child { border-left: 3px solid var(--warning); }
+.cmp-diff-note {
+  margin-top: 0.75rem; font-size: 0.8rem; color: var(--text-muted);
+}
+
+/* Text comparison */
+.cmp-text-grid { display: grid; gap: 1rem; }
+.cmp-text-col {
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.cmp-drug-header2 { font-weight: 700; font-size: 0.875rem; margin-bottom: 0.5rem; }
+.cmp-text-body { font-size: 0.875rem; line-height: 1.6; }
+
+@media (max-width: 600px) {
+  .cmp-text-grid { grid-template-columns: 1fr !important; }
+}

@@ -1,5 +1,5 @@
 const App = (() => {
-  const pages = { quiz: QuizPage, search: SearchPage };
+  const pages = { quiz: QuizPage, compare: ComparePage, search: SearchPage };
   let currentPage = 'quiz';
 
   function navigate(page) {
