@@ -24,6 +24,12 @@ const SearchPage = (() => {
     });
   }
 
+  function normalize(s) {
+    return s
+      .replace(/[Ａ-Ｚａ-ｚ０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+      .toLowerCase();
+  }
+
   function doSearch() {
     const q = document.getElementById('search-input')?.value.trim();
     const countEl = document.getElementById('result-count');
@@ -34,11 +40,12 @@ const SearchPage = (() => {
       return;
     }
 
-    const ql = q.toLowerCase();
-    const results = allData.filter(d =>
-      d.g.toLowerCase().includes(ql) ||
-      d.b.some(b => b.toLowerCase().includes(ql))
-    ).slice(0, 100);
+    // 全角半角正規化 + スペース区切りAND検索
+    const tokens = normalize(q).split(/[\s　]+/).filter(Boolean);
+    const results = allData.filter(d => {
+      const target = normalize([d.g, ...d.b].join(' '));
+      return tokens.every(tok => target.includes(tok));
+    }).slice(0, 100);
 
     if (countEl) countEl.textContent = `${results.length} 件${results.length === 100 ? '（上位100件）' : ''}`;
 
@@ -61,8 +68,13 @@ const SearchPage = (() => {
 
   function highlight(text, query) {
     if (!query) return text;
-    const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return text.replace(new RegExp(escaped, 'gi'), m => `<mark style="background:#fef08a;border-radius:2px">${m}</mark>`);
+    const tokens = normalize(query).split(/[\s　]+/).filter(Boolean);
+    let result = text;
+    tokens.forEach(tok => {
+      const escaped = tok.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      result = result.replace(new RegExp(escaped, 'gi'), m => `<mark style="background:#fef08a;border-radius:2px">${m}</mark>`);
+    });
+    return result;
   }
 
   return { render };

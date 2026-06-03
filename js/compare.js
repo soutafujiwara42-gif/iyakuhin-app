@@ -25,10 +25,23 @@ const ComparePage = (() => {
     return '';
   }
 
-  // スペース区切りで全トークンを含む部分一致
+  // 全角→半角・大文字→小文字に正規化
+  function normalize(s) {
+    return s
+      .replace(/[Ａ-Ｚａ-ｚ０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+      .replace(/[‐－―]/g, '-')
+      .toLowerCase();
+  }
+
+  // スペース区切り（全角・半角）で全トークンを含む部分一致
   function matchTokens(text, tokens) {
-    const t = text.toLowerCase();
+    const t = normalize(text);
     return tokens.every(tok => t.includes(tok));
+  }
+
+  // クエリをトークン化（全角・半角スペース両対応）
+  function tokenize(q) {
+    return normalize(q).split(/[\s　]+/).filter(Boolean);
   }
 
   async function loadData() {
@@ -76,8 +89,8 @@ const ComparePage = (() => {
     if (!el) return;
     if (!q.trim()) { el.innerHTML = ''; return; }
 
-    // スペース区切りでトークン化（部分一致 AND 検索）
-    const tokens = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    // 全角半角・大小文字を正規化してトークン化（部分一致 AND 検索）
+    const tokens = tokenize(q);
     const senpatsuOnly = document.getElementById('cmp-senpatsu-only')?.checked;
 
     const results = Object.entries(insertsData)
