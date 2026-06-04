@@ -371,6 +371,9 @@ main {
 }
 .section-tab:hover { border-color: var(--primary); color: var(--primary); }
 .section-tab.active { background: var(--primary); color: white; border-color: var(--primary); }
+.section-tab.tab-detail { border-color: #f97316; color: #ea580c; }
+.section-tab.tab-detail:hover { background: #fff7ed; }
+.section-tab.tab-detail.active { background: #f97316; color: white; border-color: #f97316; }
 
 /* Comparison table */
 .cmp-legend { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }

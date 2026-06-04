@@ -1,19 +1,34 @@
 const ComparePage = (() => {
   let insertsData = null;
-  let medicinesData = null;
-  let selectedDrugs = []; // [{xml_id, generic, brands}]
+  let detailCache = {};   // { カテゴリ名: {xml_id: {...}} }
+  let selectedDrugs = [];
 
+  // source:'slim' = inserts.json収録済み / source:'detail' = カテゴリ別ファイルから遅延ロード
   const SECTIONS = [
-    { key: 'contraindications', label: '禁忌', type: 'list' },
-    { key: 'indications',       label: '効能・効果', type: 'list' },
-    { key: 'serious_adverse',   label: '重大な副作用', type: 'list' },
-    { key: 'important_precautions', label: '重要な基本的注意', type: 'list' },
-    { key: 'pregnant',  label: '妊婦', type: 'text' },
-    { key: 'nursing',   label: '授乳婦', type: 'text' },
-    { key: 'elderly',   label: '高齢者', type: 'text' },
-    { key: 'pediatric', label: '小児', type: 'text' },
-    { key: 'renal',     label: '腎機能障害', type: 'text' },
-    { key: 'hepatic',   label: '肝機能障害', type: 'text' },
+    // ── slim ──────────────────────────────────────────
+    { key: 'contraindications',      label: '禁忌',          type: 'list', source: 'slim' },
+    { key: 'indications',            label: '効能・効果',      type: 'list', source: 'slim' },
+    { key: 'serious_adverse',        label: '重大な副作用',    type: 'list', source: 'slim' },
+    { key: 'important_precautions',  label: '重要な基本的注意', type: 'list', source: 'slim' },
+    { key: 'pregnant',   label: '妊婦',     type: 'text', source: 'slim' },
+    { key: 'nursing',    label: '授乳婦',   type: 'text', source: 'slim' },
+    { key: 'elderly',    label: '高齢者',   type: 'text', source: 'slim' },
+    { key: 'pediatric',  label: '小児',     type: 'text', source: 'slim' },
+    { key: 'renal',      label: '腎機能障害', type: 'text', source: 'slim' },
+    { key: 'hepatic',    label: '肝機能障害', type: 'text', source: 'slim' },
+    // ── detail（遅延ロード）───────────────────────────
+    { key: 'dosage',                 label: '用法・用量',          type: 'text', source: 'detail' },
+    { key: 'dosage_precautions',     label: '用法・用量の注意',     type: 'list', source: 'detail' },
+    { key: 'complications',          label: '合併症・既往歴',       type: 'list', source: 'detail' },
+    { key: 'application_precautions',label: '適用上の注意',        type: 'list', source: 'detail' },
+    { key: 'interactions',           label: '相互作用',            type: 'text', source: 'detail' },
+    { key: 'adverse_events',         label: '副作用（全般）',       type: 'list', source: 'detail' },
+    { key: 'other_adverse',          label: 'その他の副作用',       type: 'text', source: 'detail' },
+    { key: 'pharmacology',           label: '薬効薬理',            type: 'text', source: 'detail' },
+    { key: 'pharmacokinetics',       label: '薬物動態',            type: 'text', source: 'detail' },
+    { key: 'physicochemical',        label: '理化学的知見',         type: 'text', source: 'detail' },
+    { key: 'handling',               label: '取扱い上の注意',       type: 'text', source: 'detail' },
+    { key: 'package',                label: '包装',                type: 'text', source: 'detail' },
   ];
 
   // 後発品の 商品名「メーカー」から メーカー名を抽出
@@ -44,13 +59,35 @@ const ComparePage = (() => {
     return normalize(q).split(/[\s　]+/).filter(Boolean);
   }
 
-  const DATA_VERSION = '20260604b'; // inserts.json更新時に変更
+  const DATA_VERSION = '20260604c';
 
   async function loadData() {
     if (insertsData) return;
     const res = await fetch(`data/inserts.json?v=${DATA_VERSION}`, { cache: 'no-cache' });
     if (!res.ok) throw new Error(`inserts.json load failed: ${res.status}`);
     insertsData = await res.json();
+  }
+
+  // 選択薬品に必要なカテゴリのdetailファイルをまとめてロード
+  async function loadDetailForDrugs(drugs) {
+    const cats = [...new Set(drugs.map(d => insertsData[d.xml_id]?.cat).filter(Boolean))];
+    await Promise.all(cats.map(async cat => {
+      if (detailCache[cat]) return; // キャッシュ済み
+      const res = await fetch(`data/detail/${encodeURIComponent(cat)}.json?v=${DATA_VERSION}`, { cache: 'no-cache' });
+      if (res.ok) detailCache[cat] = await res.json();
+    }));
+  }
+
+  // xml_idのdetailデータを取得（キャッシュから）
+  function getDetail(xml_id) {
+    const cat = insertsData[xml_id]?.cat;
+    return cat ? (detailCache[cat]?.[xml_id] || {}) : {};
+  }
+
+  // slim または detail から値を取得
+  function getValue(xml_id, key, source) {
+    if (source === 'slim') return insertsData[xml_id]?.[key];
+    return getDetail(xml_id)[key];
   }
 
   async function render(container) {
@@ -195,10 +232,16 @@ const ComparePage = (() => {
         </div>
         ${selectedDrugs.length >= 2 ? `
           <div style="margin-top:1rem">
-            <div style="font-size:0.875rem;font-weight:600;margin-bottom:0.5rem">比較する項目：</div>
+            <div style="font-size:0.875rem;font-weight:600;margin-bottom:0.3rem">比較する項目：</div>
+            <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.5rem">
+              🔵 基本項目（即座に表示） ／ 🟠 詳細項目（初回のみ読み込み）
+            </div>
             <div class="section-tabs">
               ${SECTIONS.map((s, i) => `
-                <button class="section-tab ${i===0?'active':''}" data-sec="${s.key}">${s.label}</button>
+                <button class="section-tab ${i===0?'active':''} ${s.source==='detail'?'tab-detail':''}"
+                        data-sec="${s.key}" data-source="${s.source}">
+                  ${s.source==='detail'?'🟠 ':''}${s.label}
+                </button>
               `).join('')}
             </div>
           </div>
@@ -215,9 +258,12 @@ const ComparePage = (() => {
     });
 
     el.querySelectorAll('.section-tab').forEach(tab => {
-      tab.addEventListener('click', () => {
+      tab.addEventListener('click', async () => {
         el.querySelectorAll('.section-tab').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
+        if (tab.dataset.source === 'detail') {
+          await loadDetailForDrugs(selectedDrugs);
+        }
         renderComparison(tab.dataset.sec);
       });
     });
@@ -240,17 +286,17 @@ const ComparePage = (() => {
     const secDef = SECTIONS.find(s => s.key === key) || SECTIONS[0];
 
     if (secDef.type === 'list') {
-      renderListComparison(el, key, secDef.label);
+      renderListComparison(el, key, secDef.label, secDef.source);
     } else {
-      renderTextComparison(el, key, secDef.label);
+      renderTextComparison(el, key, secDef.label, secDef.source);
     }
   }
 
-  function renderListComparison(el, key, label) {
+  function renderListComparison(el, key, label, source) {
     // 全薬品の全項目を集める（重複除去）
     const allItems = new Set();
     selectedDrugs.forEach(d => {
-      const items = insertsData[d.xml_id]?.[key] || [];
+      const items = getValue(d.xml_id, key, source) || [];
       items.forEach(item => allItems.add(item));
     });
 
@@ -288,7 +334,7 @@ const ComparePage = (() => {
     Array.from(allItems).forEach(item => {
       // 何割の薬に含まれるか
       const presences = drugs.map(d => {
-        const items = insertsData[d.xml_id]?.[key] || [];
+        const items = getValue(d.xml_id, key, source) || [];
         return items.some(i => normalize(i) === normalize(item));
       });
       const presentCount = presences.filter(Boolean).length;
@@ -313,14 +359,14 @@ const ComparePage = (() => {
     el.innerHTML = html;
   }
 
-  function renderTextComparison(el, key, label) {
+  function renderTextComparison(el, key, label, source) {
     const drugs = selectedDrugs;
     let html = `
       <div class="card" style="overflow-x:auto">
         <div style="font-weight:700;font-size:1rem;margin-bottom:1rem">📋 ${label}の比較</div>
         <div class="cmp-text-grid" style="grid-template-columns:repeat(${drugs.length},1fr)">
           ${drugs.map((d,i) => {
-            const text = insertsData[d.xml_id]?.[key] || '';
+            const text = getValue(d.xml_id, key, source) || '';
             return `
               <div class="cmp-text-col" style="border-top:3px solid ${COLORS[i]}">
                 <div class="cmp-drug-header2" style="color:${COLORS[i]}">薬${i+1}（${d.senpatsu?'先発':'後発'}）: ${d.generic}${!d.senpatsu&&d.maker?`「${d.maker}」`:''}</div>

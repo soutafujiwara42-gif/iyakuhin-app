@@ -17,20 +17,36 @@ const FlashcardPage = (() => {
   };
 
   const CARD_TYPES = [
-    { key: 'generic',          label: '一般名',     icon: '💊' },
-    { key: 'contraindications',label: '禁忌',       icon: '⛔' },
-    { key: 'composition',      label: '組成・性状', icon: '🔬' },
+    { key: 'generic',          label: '一般名',       icon: '💊', source: 'med'    },
+    { key: 'contraindications',label: '禁忌',         icon: '⛔', source: 'slim'   },
+    { key: 'composition',      label: '組成・性状',   icon: '🔬', source: 'slim'   },
+    { key: 'dosage',           label: '用法・用量',   icon: '📋', source: 'detail' },
+    { key: 'interactions',     label: '相互作用',     icon: '⚡', source: 'detail' },
+    { key: 'pharmacology',     label: '薬効薬理',     icon: '🧪', source: 'detail' },
   ];
+
+  const DATA_VERSION = '20260604c';
+  let detailCache = {};
 
   async function loadData() {
     if (insertsData) return;
-    const DATA_VERSION = '20260604b';
     const [ins, med] = await Promise.all([
       fetch(`data/inserts.json?v=${DATA_VERSION}`, { cache: 'no-cache' }).then(r => r.json()),
       fetch('data/medicines.json').then(r => r.json()),
     ]);
     insertsData = ins;
     medicinesData = med;
+  }
+
+  async function loadDetailForCategory(cat) {
+    if (detailCache[cat]) return;
+    const res = await fetch(`data/detail/${encodeURIComponent(cat)}.json?v=${DATA_VERSION}`, { cache: 'no-cache' });
+    if (res.ok) detailCache[cat] = await res.json();
+  }
+
+  function getDetailValue(xml_id, key) {
+    const cat = insertsData[xml_id]?.cat;
+    return cat ? (detailCache[cat]?.[xml_id]?.[key] ?? null) : null;
   }
 
   async function render(container) {
@@ -113,7 +129,7 @@ const FlashcardPage = (() => {
       updateDeckCount(container);
     });
 
-    document.getElementById('fc-start-btn').addEventListener('click', () => startDeck(container));
+    document.getElementById('fc-start-btn').addEventListener('click', () => startDeck(container, settings.cardType));
 
     updateDeckCount(container);
   }
@@ -210,6 +226,33 @@ const FlashcardPage = (() => {
         });
       }
       if (countOnly) return count;
+
+    } else {
+      // detail系カード（用法・用量 / 相互作用 / 薬効薬理）
+      const cardTypeDef = CARD_TYPES.find(t => t.key === settings.cardType);
+      const key = settings.cardType;
+      const labelName = cardTypeDef?.label || key;
+      let count = 0;
+      for (const [xml_id, d] of Object.entries(insertsData)) {
+        if (settings.senpatsuOnly && !d.senpatsu) continue;
+        const brand = d.brands[0];
+        if (!brand) continue;
+        if (settings.category !== 'すべて' && d.cat !== settings.category) continue;
+        // detailキャッシュから値を取得（buildDeck呼び出し前にloadDetail済みが前提）
+        const val = getDetailValue(xml_id, key);
+        if (!val || (Array.isArray(val) ? val.length === 0 : !val.trim())) continue;
+        count++;
+        if (countOnly) continue;
+        cards.push({
+          front: brand,
+          frontLabel: '商品名',
+          back: Array.isArray(val) ? val : val,
+          backLabel: labelName,
+          sub: d.generic,
+          type: Array.isArray(val) ? 'list' : 'text',
+        });
+      }
+      if (countOnly) return count;
     }
 
     // シャッフル
@@ -221,7 +264,18 @@ const FlashcardPage = (() => {
   }
 
   // =========== デッキ開始 ===========
-  function startDeck(container) {
+  async function startDeck(container, cardType) {
+    // detailカードの場合は先にカテゴリ別detailファイルを読み込む
+    const typeDef = CARD_TYPES.find(t => t.key === (cardType || settings.cardType));
+    if (typeDef?.source === 'detail') {
+      const resultEl = document.getElementById('fc-deck-count');
+      if (resultEl) resultEl.textContent = '📥 詳細データを読み込み中…';
+      // 対象カテゴリのdetailをロード
+      const targetCats = settings.category === 'すべて'
+        ? [...new Set(Object.values(insertsData).map(d => d.cat).filter(Boolean))]
+        : [settings.category];
+      await Promise.all(targetCats.map(loadDetailForCategory));
+    }
     deck = buildDeck(false);
     if (deck.length === 0) return;
     deckIdx = 0;
