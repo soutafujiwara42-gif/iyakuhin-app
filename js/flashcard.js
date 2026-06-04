@@ -134,16 +134,29 @@ const FlashcardPage = (() => {
     updateDeckCount(container);
   }
 
-  function updateDeckCount(container) {
-    const cards = buildDeck(true);
+  async function updateDeckCount(container) {
+    const typeDef = CARD_TYPES.find(t => t.key === settings.cardType);
     const el = document.getElementById('fc-deck-count');
+    const startBtn = document.getElementById('fc-start-btn');
+
+    if (typeDef?.source === 'detail') {
+      // detail系: まず対象カテゴリのファイルを読み込んでからカウント
+      if (el) { el.textContent = '📥 データ確認中…'; el.style.color = 'var(--text-muted)'; }
+      if (startBtn) startBtn.disabled = true;
+
+      const targetCats = settings.category === 'すべて'
+        ? [...new Set(Object.values(insertsData).map(d => d.cat).filter(Boolean))]
+        : [settings.category];
+      await Promise.all(targetCats.map(loadDetailForCategory));
+    }
+
+    const cards = buildDeck(true);
     if (el) {
       el.textContent = cards > 0
         ? `📚 ${cards} 枚のカードが見つかりました`
         : '⚠ 条件に合うカードがありません';
       el.style.color = cards > 0 ? 'var(--success)' : 'var(--danger)';
     }
-    const startBtn = document.getElementById('fc-start-btn');
     if (startBtn) startBtn.disabled = cards === 0;
   }
 
@@ -246,7 +259,7 @@ const FlashcardPage = (() => {
         cards.push({
           front: brand,
           frontLabel: '商品名',
-          back: Array.isArray(val) ? val : val,
+          back: val,
           backLabel: labelName,
           sub: d.generic,
           type: Array.isArray(val) ? 'list' : 'text',
