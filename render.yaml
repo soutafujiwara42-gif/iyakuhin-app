@@ -5,7 +5,16 @@ services:
     staticPublishPath: .
     buildCommand: ""
     headers:
-      - path: /data/*.json
+      - path: /data/*
+        name: Cache-Control
+        value: no-cache, must-revalidate
+      - path: /js/*
+        name: Cache-Control
+        value: no-cache, must-revalidate
+      - path: /css/*
+        name: Cache-Control
+        value: no-cache, must-revalidate
+      - path: /index.html
         name: Cache-Control
         value: no-cache, must-revalidate
     routes:

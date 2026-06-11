@@ -25,7 +25,7 @@ const FlashcardPage = (() => {
     { key: 'pharmacology',     label: '薬効薬理',     icon: '🧪', source: 'detail' },
   ];
 
-  const DATA_VERSION = '20260604c';
+  const DATA_VERSION = '20260604d';
   let detailCache = {};
 
   async function loadData() {

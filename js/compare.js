@@ -48,24 +48,29 @@ const ComparePage = (() => {
       .toLowerCase();
   }
 
-  // スペース区切り（全角・半角）で全トークンを含む部分一致
-  function matchTokens(text, tokens) {
-    const t = normalize(text);
-    return tokens.every(tok => t.includes(tok));
-  }
-
   // クエリをトークン化（全角・半角スペース両対応）
   function tokenize(q) {
     return normalize(q).split(/[\s　]+/).filter(Boolean);
   }
 
-  const DATA_VERSION = '20260604c';
+  const DATA_VERSION = '20260604d';
+  let searchIndex = null; // [{ xml_id, d, text }]  textは正規化済み検索文字列
 
   async function loadData() {
     if (insertsData) return;
     const res = await fetch(`data/inserts.json?v=${DATA_VERSION}`, { cache: 'no-cache' });
     if (!res.ok) throw new Error(`inserts.json load failed: ${res.status}`);
     insertsData = await res.json();
+    buildSearchIndex();
+  }
+
+  // 検索インデックスを事前計算（一般名・商品名・メーカー名を正規化して連結）
+  function buildSearchIndex() {
+    searchIndex = Object.entries(insertsData).map(([xml_id, d]) => {
+      const maker = extractMaker(d.brands);
+      const text = normalize([d.generic, ...d.brands, maker].join(' '));
+      return { xml_id, d, text };
+    });
   }
 
   // 選択薬品に必要なカテゴリのdetailファイルをまとめてロード
@@ -133,22 +138,26 @@ const ComparePage = (() => {
     const tokens = tokenize(q);
     const senpatsuOnly = document.getElementById('cmp-senpatsu-only')?.checked;
 
-    const results = Object.entries(insertsData)
-      .filter(([, d]) => {
-        if (senpatsuOnly && !d.senpatsu) return false;
-        const maker = extractMaker(d.brands);
-        // 一般名・商品名・メーカー名すべてを対象にトークン一致
-        const searchTarget = [
-          d.generic,
-          ...d.brands,
-          maker
-        ].join(' ');
-        return matchTokens(searchTarget, tokens);
-      })
-      .slice(0, 50);
+    // 事前計算済みインデックスに対してトークンAND部分一致
+    const results = [];
+    for (const entry of searchIndex) {
+      if (senpatsuOnly && !entry.d.senpatsu) continue;
+      if (tokens.every(tok => entry.text.includes(tok))) {
+        results.push([entry.xml_id, entry.d]);
+        if (results.length >= 50) break;
+      }
+    }
 
     if (results.length === 0) {
-      el.innerHTML = `<div style="color:var(--text-muted);font-size:0.875rem;padding:0.5rem 0">見つかりませんでした</div>`;
+      // 先発品のみON時は、後発品なら見つかる可能性を案内
+      let hint = '';
+      if (senpatsuOnly) {
+        const foundIfAll = searchIndex.some(e => tokens.every(tok => e.text.includes(tok)));
+        if (foundIfAll) {
+          hint = `<div style="margin-top:0.4rem;color:var(--warning)">💡「先発品のみ」をOFFにすると後発品が見つかります</div>`;
+        }
+      }
+      el.innerHTML = `<div style="color:var(--text-muted);font-size:0.875rem;padding:0.5rem 0">見つかりませんでした${hint}</div>`;
       return;
     }
 
@@ -160,11 +169,6 @@ const ComparePage = (() => {
       const badge = d.senpatsu
         ? `<span class="drug-type-badge senpatsu">先発</span>`
         : `<span class="drug-type-badge generic">後発</span>`;
-
-      // 後発品: メーカー名を大きく表示。先発品: 商品名を表示
-      const nameDisplay = d.senpatsu
-        ? `${d.brands[0] || d.generic}`
-        : `${d.brands[0]?.replace(/「.+?」/, '') || d.generic} <span class="maker-name">「${maker}」</span>`;
 
       return `
         <div class="search-result-item ${disabled ? 'disabled' : ''}" data-id="${xml_id}">
