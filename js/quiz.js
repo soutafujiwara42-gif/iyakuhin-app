@@ -118,7 +118,7 @@ const QuizPage = (() => {
       <div class="feedback" id="feedback"></div>
 
       <div class="quiz-actions">
-        <button class="btn btn-outline" id="skip-btn">スキップ →</button>
+        <button class="btn btn-outline" id="reveal-btn">わからない（答えを見る）👀</button>
         <button class="btn btn-outline" id="hint-btn">ヒント 💡</button>
       </div>
     `;
@@ -127,7 +127,7 @@ const QuizPage = (() => {
     input.focus();
     input.addEventListener('keydown', e => { if (e.key === 'Enter') checkAnswer(); });
     document.getElementById('check-btn').addEventListener('click', checkAnswer);
-    document.getElementById('skip-btn').addEventListener('click', skip);
+    document.getElementById('reveal-btn').addEventListener('click', revealAnswer);
     document.getElementById('hint-btn').addEventListener('click', showHint);
   }
 
@@ -161,14 +161,29 @@ const QuizPage = (() => {
     }
 
     document.getElementById('check-btn').textContent = '次の問題 →';
-    document.getElementById('skip-btn').style.display = 'none';
+    document.getElementById('reveal-btn').style.display = 'none';
+    document.getElementById('hint-btn').style.display = 'none';
   }
 
-  function skip() {
+  function revealAnswer() {
+    if (answered) { advanceQuestion(); return; }
+    const input = document.getElementById('answer-input');
+    const fb = document.getElementById('feedback');
+    if (!fb) return;
+
+    answered = true;
     stats.total++;
     stats.wrong++;
-    sessionIdx++;
-    nextQuestion();
+
+    const allBrands = current.b.join('、');
+    if (input) { input.classList.add('wrong'); input.disabled = true; }
+    fb.className = 'feedback show wrong';
+    fb.innerHTML = `👀 答えは…<br><span class="correct-answer">${current.g}</span>
+      <div class="all-brands">同一成分の商品名: ${allBrands}</div>`;
+
+    document.getElementById('check-btn').textContent = '次の問題 →';
+    document.getElementById('reveal-btn').style.display = 'none';
+    document.getElementById('hint-btn').style.display = 'none';
   }
 
   function advanceQuestion() {
